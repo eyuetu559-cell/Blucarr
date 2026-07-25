@@ -32,11 +32,11 @@ const botDict = {
     aboutBtn: "ℹ️ ስለ ብሉ ካርድ",
     supportBtn: "❓ እርዳታና ድጋፍ",
     langToggleBtn: "🌐 ቋንቋ ቀይር / Change Language",
-    registerBtn: "📝 መመዝገቢያ / Register",
+    registerBtn: "📝 መመዝገቢያ / Update Contact",
     backBtn: "⬅️ ወደ ዋና ማውጫ",
     chooseLang: "እባክዎ የሚመርጡትን ቋንቋ ይምረጡ:",
     langUpdated: "ቋንቋዎ በተሳካ ሁኔታ ወደ አማርኛ ተቀይሯል! 🇪🇹",
-    shareContactPrompt: "እባክዎ ለመመዝገብ ከታች ያለውን 'ስልክ ቁጥር አጋራ' የሚለውን ቁልፍ ይጫኑ 📱",
+    welcomeRegisterPrompt: "👋እንኳን ወደ ብሉ ካርድ (BlueCards) በደህና መጡ!\n\nመተግበሪያውን መጠቀም ለመጀመር እባክዎ ከታች ያለውን **'ስልክ ቁጥር አጋራ'** የሚለውን ቁልፍ በመጫን ይመዝገቡ 📱",
     shareContactBtn: "📱 ስልክ ቁጥር አጋራ / Share Contact",
     registerSuccess: "✅ ምዝገባዎ በተሳካ ሁኔታ ተጠናቋል! እናመሰግናለን!"
   },
@@ -49,11 +49,11 @@ const botDict = {
     aboutBtn: "ℹ️ About BlueCards",
     supportBtn: "❓ Support Help",
     langToggleBtn: "🌐 Change Language",
-    registerBtn: "📝 Register for Updates",
+    registerBtn: "📝 Update Contact",
     backBtn: "⬅️ Back to Menu",
     chooseLang: "Please select your preferred language:",
     langUpdated: "Your language profile has been successfully set to English! 🇬🇧",
-    shareContactPrompt: "Please click the 'Share Contact' button at the bottom of your screen to register 📱",
+    welcomeRegisterPrompt: "👋 Welcome to BlueCards!\n\nTo start using the bot and access our platform, please share your contact details by clicking the button below 📱",
     shareContactBtn: "📱 Share Contact",
     registerSuccess: "✅ Registration complete! Thank you for joining us!"
   }
@@ -64,14 +64,14 @@ const t = (chatId, key) => {
   return botDict[currentLang][key] || botDict['am'][key] || key;
 };
 
-// Configure the native chat command menu dropdown
+// Configure native bot commands menu dropdown
 bot.setMyCommands([
   { command: 'start', description: '🚀 Open BlueCards Mini App' },
   { command: 'help', description: '❓ Get help' },
   { command: 'webapp', description: '🌐 Launch mini webapp' }
 ]);
 
-// Main Menu Layout Configuration (Includes Inline Register Button)
+// Main Menu Layout Configuration
 const getMainMenuKeyboard = (chatId) => ({
   reply_markup: {
     inline_keyboard: [
@@ -99,13 +99,48 @@ const getAboutKeyboard = (chatId) => ({
   }
 });
 
-// Command Controllers
-bot.onText(/\/start/, (msg) => {
+/**
+ * MANDATORY REGISTRATION CHECK ON /START
+ */
+bot.onText(/\/start/, async (msg) => {
   const chatId = msg.chat.id;
-  bot.sendMessage(chatId, t(chatId, 'mainMenuText'), {
-    parse_mode: 'Markdown',
-    ...getMainMenuKeyboard(chatId)
-  });
+
+  try {
+    // Check if user already exists in Supabase database
+    const { data, error } = await supabase
+      .from('users')
+      .select('chat_id')
+      .eq('chat_id', chatId.toString());
+
+    if (error) throw error;
+
+    // If user is NOT found in database, force registration prompt immediately
+    if (!data || data.length === 0) {
+      bot.sendMessage(chatId, t(chatId, 'welcomeRegisterPrompt'), {
+        parse_mode: 'Markdown',
+        reply_markup: {
+          keyboard: [
+            [{ text: t(chatId, 'shareContactBtn'), request_contact: true }]
+          ],
+          resize_keyboard: true,
+          one_time_keyboard: true
+        }
+      });
+    } else {
+      // If user IS already registered, show regular main menu
+      bot.sendMessage(chatId, t(chatId, 'mainMenuText'), {
+        parse_mode: 'Markdown',
+        ...getMainMenuKeyboard(chatId)
+      });
+    }
+  } catch (err) {
+    console.error("Supabase Start Check Error:", err);
+    // Fallback safety: show main menu if database lookup fails
+    bot.sendMessage(chatId, t(chatId, 'mainMenuText'), {
+      parse_mode: 'Markdown',
+      ...getMainMenuKeyboard(chatId)
+    });
+  }
 });
 
 bot.onText(/\/help/, (msg) => {
@@ -113,13 +148,12 @@ bot.onText(/\/help/, (msg) => {
   bot.sendMessage(chatId, t(chatId, 'helpPortalText'), { parse_mode: 'Markdown' });
 });
 
-// Contact Listener (Catches the phone number when they press Share Contact)
+// Contact Listener (Saves new user or updates info when share contact is clicked)
 bot.on('contact', async (msg) => {
   const chatId = msg.chat.id;
   const contact = msg.contact;
 
   try {
-    // Upsert user into Supabase 'users' table using their phone number
     const { error } = await supabase
       .from('users')
       .upsert({
@@ -132,11 +166,10 @@ bot.on('contact', async (msg) => {
 
     if (error) throw error;
 
-    // Remove the contact keyboard and send success message
+    // Remove the contact keyboard and welcome them with the main menu
     bot.sendMessage(chatId, t(chatId, 'registerSuccess'), {
       reply_markup: { remove_keyboard: true }
     }).then(() => {
-      // Bring back the main inline menu
       bot.sendMessage(chatId, t(chatId, 'mainMenuText'), {
         parse_mode: 'Markdown',
         ...getMainMenuKeyboard(chatId)
@@ -144,7 +177,7 @@ bot.on('contact', async (msg) => {
     });
 
   } catch (err) {
-    console.error("Supabase Error:", err);
+    console.error("Supabase Save Error:", err);
     bot.sendMessage(chatId, "⚠️ Database connection error. Please try again later.");
   }
 });
@@ -165,8 +198,9 @@ bot.on('callback_query', (query) => {
     bot.editMessageText(t(chatId, 'helpPortalText'), { chat_id: chatId, message_id: messageId, parse_mode: 'Markdown', ...getAboutKeyboard(chatId) });
   }
   else if (data === "trigger_register") {
-    // Open the native Telegram Contact Request Keyboard
-    bot.sendMessage(chatId, t(chatId, 'shareContactPrompt'), {
+    // Allows existing users to update their contact info anytime via the inline button
+    bot.sendMessage(chatId, t(chatId, 'welcomeRegisterPrompt'), {
+      parse_mode: 'Markdown',
       reply_markup: {
         keyboard: [
           [{ text: t(chatId, 'shareContactBtn'), request_contact: true }]
