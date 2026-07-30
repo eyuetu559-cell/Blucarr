@@ -1,16 +1,23 @@
 import React, { useState } from 'react';
 
+const PAYMENT_METHODS = [
+  { id: 'telebirr', name: 'TeleBirr', account: '0963242274', min: 850, max: 200000 },
+  { id: 'cbe', name: 'CBE', account: '1000610149786', min: 850, max: 200000 },
+  { id: 'cbebirr', name: 'CBE Birr', account: '0919184337', min: 850, max: 200000 }
+];
+
 export default function FundWalletModal({ isOpen, onClose, onAddFunds }) {
   const [amount, setAmount] = useState('');
   const [txId, setTxId] = useState('');
   const [receipt, setReceipt] = useState(null);
   const [copied, setCopied] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [selectedMethod, setSelectedMethod] = useState(PAYMENT_METHODS[0]);
 
   if (!isOpen) return null;
 
   const handleCopy = () => {
-    navigator.clipboard.writeText("0963242274");
+    navigator.clipboard.writeText(selectedMethod.account);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };
@@ -76,12 +83,28 @@ export default function FundWalletModal({ isOpen, onClose, onAddFunds }) {
             {/* Payment Provider Card */}
             <div>
               <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Select Payment Method</label>
-              <div className="p-4 rounded-xl border-2 border-blue-500 bg-blue-50/30 flex justify-between items-center">
-                <div>
-                  <p className="font-bold text-gray-800 text-base">TeleBirr</p>
-                  <p className="text-xs text-gray-400">Min: 850 | Max: 200000</p>
-                </div>
-                <div className="w-5 h-5 rounded-full border-4 border-blue-500 bg-white"></div>
+              <div className="space-y-3">
+                {PAYMENT_METHODS.map((method) => (
+                  <div 
+                    key={method.id}
+                    onClick={() => setSelectedMethod(method)}
+                    className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex justify-between items-center ${
+                      selectedMethod.id === method.id 
+                        ? 'border-blue-500 bg-blue-50/30' 
+                        : 'border-gray-200 bg-white hover:border-blue-300'
+                    }`}
+                  >
+                    <div>
+                      <p className="font-bold text-gray-800 text-base">{method.name}</p>
+                      <p className="text-xs text-gray-400">Min: {method.min} | Max: {method.max}</p>
+                    </div>
+                    <div className={`w-5 h-5 rounded-full border-4 ${
+                      selectedMethod.id === method.id 
+                        ? 'border-blue-500 bg-white' 
+                        : 'border-gray-300 bg-transparent'
+                    }`}></div>
+                  </div>
+                ))}
               </div>
             </div>
 
@@ -91,7 +114,7 @@ export default function FundWalletModal({ isOpen, onClose, onAddFunds }) {
               <div className="flex justify-between items-center">
                 <span className="text-xs font-medium text-gray-500">Account Number</span>
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-mono font-bold text-gray-700">0963242274</span>
+                  <span className="text-sm font-mono font-bold text-gray-700">{selectedMethod.account}</span>
                   <button type="button" onClick={handleCopy} className="text-gray-400 hover:text-blue-600 transition-colors">
                     {copied ? '✅' : '📋'}
                   </button>
